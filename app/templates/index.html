@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>防災調整池 計算ソフト</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>防災調整池 計算ソフト</h1>
+  <p class="sub">茨城県・千葉県対応 — 容量計算・貯留追跡（厳密法）・簡便法・洪水吐き / PDF計算書出力</p>
+</header>
+
+<main>
+<form id="calc-form" onsubmit="return false;">
+
+  <section>
+    <h2>1. 設計条件</h2>
+    <div class="grid">
+      <label>件名<input type="text" id="project_name" placeholder="○○開発事業"></label>
+      <label>県
+        <select id="prefecture"></select>
+      </label>
+      <label>地区（降雨強度式）
+        <select id="district"></select>
+      </label>
+      <label>確率年（洪水調節容量）
+        <select id="return_period"></select>
+      </label>
+      <label>確率年（洪水吐き）
+        <select id="spillway_return_period"></select>
+      </label>
+      <label>計画降雨波形
+        <select id="waveform">
+          <option value="central">中央集中型</option>
+          <option value="rear">後方集中型</option>
+        </select>
+      </label>
+      <label>降雨継続時間（分）<input type="number" id="duration_min" value="1440" step="10"></label>
+      <label>計算時間単位Δt（分）<input type="number" id="dt_min" value="10" step="5" min="5"></label>
+    </div>
+    <p class="note" id="preset-note"></p>
+    <p class="note" id="formula-preview"></p>
+  </section>
+
+  <section>
+    <h2>2. 流域</h2>
+    <div class="grid">
+      <label>流域名称<input type="text" id="basin_name" value="流域-1"></label>
+      <label>流域面積 A（ha）<input type="number" id="area_ha" value="10.0" step="0.001" min="0.001"></label>
+      <label>流出係数 f<input type="number" id="runoff_f" value="0.80" step="0.01" min="0.01" max="1.0"></label>
+      <label id="imperv-wrap">不浸透面積率（%）→f自動計算
+        <input type="number" id="impervious_pct" placeholder="例: 50" step="1" min="0" max="100">
+      </label>
+      <label>洪水到達時間の算定
+        <select id="tc_method">
+          <option value="fixed">直接指定</option>
+          <option value="doken">土研式（L, H から算定）</option>
+        </select>
+      </label>
+      <label id="tc-fixed-wrap">洪水到達時間 tc（分）<input type="number" id="tc_min" value="10" step="0.1" min="1"></label>
+      <label id="tc-l-wrap" class="hidden">流路延長 L（m）<input type="number" id="tc_length_m" value="0" step="1"></label>
+      <label id="tc-h-wrap" class="hidden">標高差 H（m）<input type="number" id="tc_height_m" value="0" step="0.1"></label>
+    </div>
+  </section>
+
+  <section>
+    <h2>3. 貯留施設</h2>
+    <div class="grid">
+      <label>施設名称<input type="text" id="pond_name" value="調整池1号"></label>
+      <label>許容放流量 Qa（m³/s）※0で比流量から自動
+        <input type="number" id="allowable_q" value="0" step="0.001" min="0"></label>
+      <label>放流比流量（m³/s/ha）※空欄は県既定値
+        <input type="number" id="unit_q" placeholder="県既定値" step="0.001" min="0"></label>
+      <label>水位容量計算
+        <select id="hav_method">
+          <option value="cone">せつ頭錐体</option>
+          <option value="prism">平均面積を有する柱体</option>
+        </select>
+      </label>
+      <label>堆積土砂 原単位（m³/ha・年）<input type="number" id="sediment_unit" value="150" step="10" min="0"></label>
+      <label>造成期間（年）<input type="number" id="sediment_years" value="1" step="0.5" min="0"></label>
+    </div>
+
+    <h3>水位-面積表（H-A-V）</h3>
+    <table class="input-table" id="hav-table">
+      <thead><tr><th>水位（m）</th><th>面積（m²）</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <button type="button" class="mini" onclick="addHavRow()">＋ 行を追加</button>
+
+    <h3>放流施設（オリフィス）</h3>
+    <table class="input-table" id="orifice-table">
+      <thead><tr><th>形状</th><th>敷高（m）</th><th>幅B（m）</th><th>高D（m）</th><th>内径φ（m）</th><th>流量係数C</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <button type="button" class="mini" onclick="addOrificeRow()">＋ 行を追加</button>
+  </section>
+
+  <section>
+    <h2>4. 洪水吐き</h2>
+    <div class="grid">
+      <label>計算する
+        <select id="spillway_enabled">
+          <option value="true">はい</option>
+          <option value="false">いいえ</option>
+        </select>
+      </label>
+      <label>池形式
+        <select id="pond_type">
+          <option value="excavated">掘り込み式</option>
+          <option value="dam">ダム式</option>
+        </select>
+      </label>
+      <label>採用越流幅 L（m）<input type="number" id="spillway_design_width" value="8.0" step="0.1" min="0"></label>
+      <label>流量係数 C<input type="number" id="spillway_weir_coef" value="1.8" step="0.1" min="0.1"></label>
+      <label>越流頂標高 H.W.L（m）※0で追跡計算のH.W.L
+        <input type="number" id="spillway_crest" value="0" step="0.001"></label>
+      <label>非越流部天端高（m）<input type="number" id="spillway_bank" value="0" step="0.001"></label>
+      <label>必要余裕高（m）※0で県既定値<input type="number" id="required_freeboard" value="0" step="0.05" min="0"></label>
+    </div>
+  </section>
+
+  <div class="actions">
+    <button type="button" class="primary" onclick="calculate()">計算実行</button>
+    <button type="button" class="secondary" onclick="downloadPdf()" id="pdf-btn" disabled>PDF計算書をダウンロード</button>
+    <span id="status"></span>
+  </div>
+</form>
+
+<section id="result" class="hidden">
+  <h2>計算結果</h2>
+  <div id="result-body"></div>
+</section>
+</main>
+
+<footer>
+  <p>降雨強度式の出典: 茨城県 道路計画設計マニュアル（表8-3-7・8-3-8）／千葉県 宅地開発等に伴う雨水排水・貯留浸透計画策定の手引（巻末資料－1）。
+     係数は data/prefectures/*.json で編集できます。</p>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
