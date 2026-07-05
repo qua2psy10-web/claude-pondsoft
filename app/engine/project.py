@@ -74,6 +74,67 @@ class ProjectInput:
     seismic_tau_s: float = 1.0
 
 
+def _validate(inp: ProjectInput) -> None:
+    """入力の整合性を計算前に検証し、不正時は日本語メッセージで ValueError を送出する。
+
+    最終防衛線。UI/クライアント側の事前チェックが漏れても、ここで確実に弾く。
+    """
+    levels, areas = inp.hav_levels_m, inp.hav_areas_m2
+    # 水位-面積表(H-A-V)
+    if len(levels) != len(areas):
+        raise ValueError("水位-面積表: 水位と面積の行数が一致していません")
+    if len(levels) < 2:
+        raise ValueError("水位-面積表: 2点以上（池底と天端）を入力してください")
+    for i in range(len(levels) - 1):
+        if levels[i] >= levels[i + 1]:
+            raise ValueError(
+                f"水位-面積表: 水位は下から上へ昇順で入力してください"
+                f"（{i + 1}行目 {levels[i]} ≧ {i + 2}行目 {levels[i + 1]}）")
+    for i, a in enumerate(areas):
+        if a <= 0:
+            raise ValueError(f"水位-面積表: 面積は正の値で入力してください（{i + 1}行目 {a}）")
+    for i in range(len(areas) - 1):
+        if areas[i] > areas[i + 1]:
+            raise ValueError(
+                f"水位-面積表: 面積は水位上昇に対し減少しないよう入力してください"
+                f"（{i + 1}行目 {areas[i]} ＞ {i + 2}行目 {areas[i + 1]}）")
+
+    bottom, top = levels[0], levels[-1]
+    # 放流施設（オリフィス）
+    if not inp.orifices:
+        raise ValueError("放流施設（オリフィス）を1つ以上入力してください")
+    for k, o in enumerate(inp.orifices, 1):
+        invert = o.get("invert_m", 0.0)
+        if invert < bottom - 1e-9 or invert > top + 1e-9:
+            raise ValueError(
+                f"オリフィス{k}: 敷高 {invert}m が池底 {bottom}m〜天端 {top}m の範囲外です")
+        if o.get("shape", "rect") == "rect":
+            if o.get("width_m", 0.0) <= 0 or o.get("height_m", 0.0) <= 0:
+                raise ValueError(f"オリフィス{k}（矩形）: 幅B・高Dは正の値で入力してください")
+        else:
+            if o.get("diameter_m", 0.0) <= 0:
+                raise ValueError(f"オリフィス{k}（円形）: 内径φは正の値で入力してください")
+
+    # 洪水吐き（越流頂 < 非越流部天端）: 両方が明示指定された場合のみ検証
+    if inp.spillway_enabled:
+        crest = inp.spillway_crest_level_m
+        bank = inp.spillway_bank_level_m
+        if crest > 0 and bank > 0 and crest >= bank:
+            raise ValueError(
+                f"洪水吐き: 越流頂標高 {crest}m は非越流部天端高 {bank}m より低くしてください")
+
+    # 浸透施設（有効時、算定根拠がまったく無いケース）
+    if inp.infiltration_enabled:
+        has_facility = any(
+            f.get("quantity", 0.0) > 0 and f.get("unit_infiltration_m3h", 0.0) > 0
+            for f in inp.infiltration_facilities)
+        if (not has_facility and inp.infiltration_direct_R_m3h <= 0
+                and inp.infiltration_direct_fc_mmhr <= 0):
+            raise ValueError(
+                "浸透施設を見込む場合は、施設内訳・設計浸透量R・設計浸透強度Fc"
+                "のいずれかを入力してください")
+
+
 def _resolve_tc(inp: ProjectInput) -> dict:
     if inp.tc_method == "doken":
         res = arrival_time_doken(inp.tc_length_m, inp.tc_height_m)
@@ -89,6 +150,7 @@ def _resolve_tc(inp: ProjectInput) -> dict:
 
 
 def run_project(inp: ProjectInput) -> dict:
+    _validate(inp)
     all_presets = presets_mod.load_all()
     preset = all_presets[inp.prefecture_id]
     district = next(d for d in preset["districts"] if d["id"] == inp.district_id)

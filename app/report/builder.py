@@ -107,6 +107,52 @@ def _hydrograph_png(routing, title):
     return buf
 
 
+def _pond_section_png(stage, orifices, routing, spill, title):
+    """池の縦断（横断）模式図。H-A-V の面積から代表半幅 w=√A/2 を求め、
+    左右対称のトラフ断面を描き、主要水位を水平線で注記する概念図。"""
+    import math
+    levels = stage.levels
+    widths = [math.sqrt(a) / 2.0 for a in stage.areas]
+    fig, ax = plt.subplots(figsize=(6.6, 3.4), dpi=150)
+    wmax = max(widths) if widths else 1.0
+    # 池の内壁（左右）と水面幅
+    ax.plot([-w for w in widths], levels, color="#555555", lw=1.4)
+    ax.plot(widths, levels, color="#555555", lw=1.4)
+    ax.plot([-widths[0], widths[0]], [levels[0], levels[0]],
+            color="#555555", lw=1.4)  # 池底
+    ax.fill_betweenx(levels, [-w for w in widths], widths,
+                     color="#cfe0ee", alpha=0.5)
+
+    def hline(y, label, color, ls="-"):
+        if y is None:
+            return
+        ax.axhline(y, color=color, lw=1.0, ls=ls)
+        ax.text(wmax * 1.02, y, f"{label} {y:.3f}m", va="center",
+                ha="left", fontsize=7.5, color=color)
+
+    hline(levels[0], "池底", "#777777")
+    if orifices:
+        hline(min(o.invert_m for o in orifices), "オリフィス敷高", "#2a7f3f", ":")
+    hline(routing["hwl_m"], "H.W.L", "#2244aa", "--")
+    if spill:
+        hline(spill.get("HHWL_m"), "H.H.W.L", "#aa2222", "--")
+        hline(spill.get("bank_level_m"), "天端高", "#333333")
+    else:
+        hline(levels[-1], "天端", "#333333")
+
+    ax.set_xlim(-wmax * 1.15, wmax * 1.9)
+    ax.set_xlabel("代表半幅 √(面積)/2 (m)  ※形状は模式図")
+    ax.set_ylabel("標高 (m)")
+    ax.set_title(title, fontsize=10)
+    ax.grid(True, lw=0.3, alpha=0.5)
+    buf = io.BytesIO()
+    fig.tight_layout()
+    fig.savefig(buf, format="png")
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
 def _hyeto_png(hyeto, title):
     fig, ax = plt.subplots(figsize=(6.6, 2.6), dpi=150)
     t_hr = [t / 60.0 for t in hyeto["times"]]
@@ -353,6 +399,12 @@ def build_pdf(result: dict) -> bytes:
         hav_rows.append([_fmt(h), _fmt(a, 1), _fmt(v, 1)])
     el.append(_tbl(hav_rows, col_widths=[40 * mm, 55 * mm, 55 * mm],
                    align_right_cols=(0, 1, 2)))
+    el.append(Spacer(1, 4 * mm))
+    el.append(Image(_pond_section_png(stage, result["orifices"], routing, spill,
+                                      "貯留施設 縦断模式図"),
+                    width=150 * mm, height=77 * mm))
+    el.append(Paragraph("※ 断面は H-A-V の面積から代表半幅 √(面積)/2 を用いた概念図です。",
+                        st["small"]))
     el.append(Spacer(1, 4 * mm))
 
     el.append(Paragraph("(2) 放流施設", st["h2"]))

@@ -150,12 +150,17 @@
   <div class="actions">
     <button type="button" class="primary" onclick="calculate()">計算実行</button>
     <button type="button" class="secondary" onclick="downloadPdf()" id="pdf-btn" disabled>PDF計算書をダウンロード</button>
+    <button type="button" class="secondary" onclick="savePayload()">設定を保存</button>
+    <button type="button" class="secondary" onclick="document.getElementById('load-file').click()">設定を読込</button>
+    <input type="file" id="load-file" accept=".json,application/json" class="hidden"
+           onchange="if(this.files[0]){loadPayload(this.files[0]); this.value='';}">
     <span id="status"></span>
   </div>
 </form>
 
 <section id="result" class="hidden">
   <h2>計算結果</h2>
+  <canvas id="series-chart" width="720" height="300"></canvas>
   <div id="result-body"></div>
 </section>
 </main>
