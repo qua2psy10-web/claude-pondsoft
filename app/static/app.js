@@ -1,5 +1,14 @@
 let PRESETS = {};
 
+const INFIL_CATALOG = [
+  { id: "trench", name: "浸透トレンチ", unit: "m" },
+  { id: "masu", name: "浸透ます", unit: "個" },
+  { id: "pavement", name: "透水性舗装", unit: "m²" },
+  { id: "gutter", name: "浸透側溝", unit: "m" },
+  { id: "tank", name: "大型貯留浸透槽", unit: "個" },
+  { id: "other", name: "その他", unit: "－" },
+];
+
 const $ = (id) => document.getElementById(id);
 
 async function init() {
@@ -17,6 +26,20 @@ async function init() {
   addHavRow(10.0, 3000); addHavRow(11.0, 3300); addHavRow(12.0, 3600);
   addHavRow(13.0, 3900); addHavRow(14.0, 4200);
   addOrificeRow();
+  addInfilRow();
+}
+
+function addInfilRow() {
+  const tb = $("infil-table").querySelector("tbody");
+  const tr = document.createElement("tr");
+  const opts = INFIL_CATALOG
+    .map((c) => `<option value="${c.id}">${c.name}（${c.unit}）</option>`).join("");
+  tr.innerHTML = `
+    <td><select class="if-type">${opts}</select></td>
+    <td><input type="number" step="0.01" class="if-qty" value="0"></td>
+    <td><input type="number" step="0.0001" class="if-unit" value="0"></td>
+    <td><button type="button" class="rm" onclick="this.closest('tr').remove()">✕</button></td>`;
+  tb.appendChild(tr);
 }
 
 function currentPreset() { return PRESETS[$("prefecture").value]; }
@@ -125,6 +148,18 @@ function collectPayload() {
     diameter_m: parseFloat(tr.querySelector(".o-dia").value) || 0,
     c: parseFloat(tr.querySelector(".o-c").value) || 0.6,
   }));
+  const infilFacilities = [...$("infil-table").querySelectorAll("tbody tr")]
+    .map((tr) => {
+      const typeId = tr.querySelector(".if-type").value;
+      const cat = INFIL_CATALOG.find((c) => c.id === typeId);
+      return {
+        type_id: typeId,
+        name: cat ? cat.name : "",
+        quantity: parseFloat(tr.querySelector(".if-qty").value) || 0,
+        unit_infiltration_m3h: parseFloat(tr.querySelector(".if-unit").value) || 0,
+      };
+    })
+    .filter((f) => f.quantity > 0 && f.unit_infiltration_m3h > 0);
   return {
     project_name: $("project_name").value,
     prefecture_id: $("prefecture").value,
@@ -148,6 +183,11 @@ function collectPayload() {
     hav_areas_m2: areas,
     hav_method: $("hav_method").value,
     orifices,
+    infiltration_enabled: $("infiltration_enabled").value === "true",
+    infiltration_facilities: infilFacilities,
+    infiltration_treatment_area_ha: parseFloat($("infiltration_treatment_area").value) || 0,
+    infiltration_direct_R_m3h: parseFloat($("infiltration_direct_R").value) || 0,
+    infiltration_direct_fc_mmhr: parseFloat($("infiltration_direct_fc").value) || 0,
     sediment_years: parseFloat($("sediment_years").value) || 0,
     sediment_unit_m3_per_ha_year: parseFloat($("sediment_unit").value) || 0,
     spillway_enabled: $("spillway_enabled").value === "true",
@@ -209,6 +249,11 @@ function renderResult(r) {
     ["総雨量", `${fmt(r.total_rain_mm, 1)} mm`],
     ["合理式ピーク流量", `${fmt(r.rational_peak_m3s)} m³/s`],
     ["最大流入量", `${fmt(r.inflow_peak_m3s)} m³/s`],
+    ...(r.infiltration ? [
+      ["設計浸透量 R", `${r.infiltration.R_m3h == null ? "－" : fmt(r.infiltration.R_m3h, 3) + " m³/h"}`],
+      ["設計浸透強度 Fc", `${fmt(r.infiltration.fc_mmhr, 4)} mm/h`],
+      ["浸透処理面積率 α", `${fmt(r.infiltration.treatment_ratio * 100, 1)} %`],
+    ] : []),
     ["許容放流量", `${fmt(r.allowable_q_m3s)} m³/s${r.allowable_q_auto ? "（比流量から自動設定）" : ""}`],
     ["最大放流量", `${fmt(r.max_outflow_m3s)} m³/s ${judge(r.outflow_ok)}`],
     ["必要洪水調節容量（簡便法）", `${fmt(r.required_volume_simplified_m3, 1)} m³（継続時間 ${r.critical_duration_min} 分）`],

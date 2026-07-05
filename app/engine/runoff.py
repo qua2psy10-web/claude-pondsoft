@@ -52,11 +52,16 @@ def arrival_time_doken(length_m: float, height_m: float) -> dict:
     return {"S": s, "L_sqrtS": ls, "tc_min": tc}
 
 
-def inflow_hydrograph(hyeto: dict, f: float, area_ha: float, tc_min: float) -> dict:
+def inflow_hydrograph(hyeto: dict, f: float, area_ha: float, tc_min: float,
+                      fc_mmhr: float = 0.0) -> dict:
     """合理式連続モデルによる流入ハイドログラフ。
 
     各時刻 t の流出量は、直前の洪水到達時間 tc 内の平均降雨強度を合理式に
     適用して求める:  Q(t) = 1/360・f・r̄(t-tc, t)・A
+
+    浸透施設がある場合（fc_mmhr > 0）は有効降雨モデルにより、有効降雨強度
+    f・r̄ から設計浸透強度 Fc を差し引く:
+        Q(t) = 1/360・max(f・r̄ − Fc, 0)・A
     """
     dt = hyeto["dt_min"]
     times = hyeto["times"]
@@ -77,11 +82,14 @@ def inflow_hydrograph(hyeto: dict, f: float, area_ha: float, tc_min: float) -> d
 
     flows = []
     mean_intensities = []
+    effective_intensities = []          # 浸透考慮後の有効降雨強度 Ic (mm/hr)
     for t in times:
         depth = cum_at(t) - cum_at(t - tc_min)      # tc内雨量 (mm)
         r_bar = depth * 60.0 / tc_min               # 平均降雨強度 (mm/hr)
         mean_intensities.append(r_bar)
-        flows.append(rational_peak(f, r_bar, area_ha))
+        ic = max(f * r_bar - fc_mmhr, 0.0)          # 有効降雨強度（浸透控除後）
+        effective_intensities.append(ic)
+        flows.append(ic * area_ha / 360.0)          # Q = 1/360・Ic・A
 
     peak = max(flows) if flows else 0.0
     return {
@@ -89,6 +97,8 @@ def inflow_hydrograph(hyeto: dict, f: float, area_ha: float, tc_min: float) -> d
         "dt_min": dt,
         "flows_m3s": flows,
         "mean_intensity_mmhr": mean_intensities,
+        "effective_intensity_mmhr": effective_intensities,
+        "fc_mmhr": fc_mmhr,
         "peak_m3s": peak,
         "peak_time_min": times[flows.index(peak)] if flows else 0,
         "cum_at": cum_at,   # 貯留追跡の内挿で再利用

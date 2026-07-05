@@ -2,6 +2,7 @@
 from dataclasses import dataclass, field
 
 from . import presets as presets_mod
+from .infiltration import design_infiltration
 from .rainfall import RainFormula, plan_hyetograph
 from .runoff import (ChannelSection, arrival_time_doken, arrival_time_kraven,
                      inflow_hydrograph, rational_peak)
@@ -44,6 +45,14 @@ class ProjectInput:
     hav_method: str = "cone"            # cone | prism
     initial_level_m: float | None = None
     orifices: list = field(default_factory=list)  # [{"invert_m":..,"shape":..,...}]
+
+    # 浸透施設（有効降雨モデル）
+    infiltration_enabled: bool = False
+    infiltration_facilities: list = field(default_factory=list)
+    # [{"type_id":.., "name":.., "quantity":.., "unit_infiltration_m3h":..}]
+    infiltration_treatment_area_ha: float = 0.0
+    infiltration_direct_R_m3h: float = 0.0     # >0 なら R を直接指定
+    infiltration_direct_fc_mmhr: float = 0.0   # >0 なら Fc を直接指定
 
     # 堆積土砂
     sediment_years: float = 1.0
@@ -102,13 +111,27 @@ def run_project(inp: ProjectInput) -> dict:
         allowable_q = unit_q * inp.area_ha
         allowable_q_auto = True
 
-    # 計画降雨波形と流入ハイドログラフ
+    # 浸透施設（有効降雨モデル）: 設計浸透強度 Fc を算定
+    infiltration = None
+    fc_mmhr = 0.0
+    if inp.infiltration_enabled:
+        infiltration = design_infiltration(
+            area_ha=inp.area_ha,
+            facilities=inp.infiltration_facilities,
+            treatment_area_ha=inp.infiltration_treatment_area_ha,
+            direct_R_m3h=inp.infiltration_direct_R_m3h or None,
+            direct_fc_mmhr=inp.infiltration_direct_fc_mmhr or None,
+        )
+        fc_mmhr = infiltration["fc_mmhr"]
+
+    # 計画降雨波形と流入ハイドログラフ（浸透施設ありなら Fc を控除）
     hyeto = plan_hyetograph(formula, inp.duration_min, inp.dt_min, inp.waveform)
-    inflow = inflow_hydrograph(hyeto, inp.runoff_f, inp.area_ha, tc_min)
+    inflow = inflow_hydrograph(hyeto, inp.runoff_f, inp.area_ha, tc_min,
+                               fc_mmhr=fc_mmhr)
 
     # 簡便法
     simp = required_volume(formula, inp.runoff_f, inp.area_ha, allowable_q,
-                           t_max_min=inp.duration_min)
+                           t_max_min=inp.duration_min, fc_mmhr=fc_mmhr)
 
     # 貯留追跡（厳密法）
     stage = StageStorage(inp.hav_levels_m, inp.hav_areas_m2, inp.hav_method)
@@ -157,6 +180,7 @@ def run_project(inp: ProjectInput) -> dict:
         "allowable_q_m3s": allowable_q,
         "allowable_q_auto": allowable_q_auto,
         "unit_q_m3s_per_ha": unit_q,
+        "infiltration": infiltration,
         "hyetograph": hyeto,
         "inflow": inflow,
         "rational_peak_m3s": peak_q,

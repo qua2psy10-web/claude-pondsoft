@@ -1,7 +1,8 @@
 """PDF計算書の組版（ReportLab）。
 
 章立てはFORUM8「調節池・調整池の計算」出力例に準拠:
-  表紙 / 目次 / 1章 設計条件 / 2章 流域 / 3章 貯留施設 / 4章 洪水吐き / 5章 総括表
+  表紙 / 目次 / 設計条件 / 流域 /（浸透施設）/ 貯留施設 /（洪水吐き）/ 総括表
+  ※浸透施設・洪水吐きは入力があるときのみ挿入し、章番号は動的に付番する。
 """
 import io
 from pathlib import Path
@@ -138,7 +139,15 @@ def build_pdf(result: dict) -> bytes:
     simp = result["simplified"]
     stage = result["stage"]
     spill = result["spillway"]
+    infil = result["infiltration"]
     tc = result["tc"]
+
+    # 章番号の動的割り当て（浸透施設は流域と貯留施設の間に挿入）
+    n = 2                                   # 1:設計条件 2:流域
+    ch_infil = (n := n + 1) if infil else None
+    ch_storage = (n := n + 1)
+    ch_spill = (n := n + 1) if spill else None
+    ch_summary = (n := n + 1)
 
     buf = io.BytesIO()
     doc = BaseDocTemplate(buf, pagesize=A4,
@@ -174,10 +183,15 @@ def build_pdf(result: dict) -> bytes:
 
     # ---- 目次
     el.append(Paragraph("目次", st["h1"]))
-    for line in ["1章 設計条件", "2章 流域", "3章 貯留施設",
-                 "4章 洪水吐き" if spill else None, "5章 総括表" if spill else "4章 総括表"]:
-        if line:
-            el.append(Paragraph(line, st["toc"]))
+    toc = ["1章 設計条件", "2章 流域"]
+    if ch_infil:
+        toc.append(f"{ch_infil}章 浸透施設")
+    toc.append(f"{ch_storage}章 貯留施設")
+    if ch_spill:
+        toc.append(f"{ch_spill}章 洪水吐き")
+    toc.append(f"{ch_summary}章 総括表")
+    for line in toc:
+        el.append(Paragraph(line, st["toc"]))
     el.append(PageBreak())
 
     # ---- 1章 設計条件
@@ -196,11 +210,13 @@ def build_pdf(result: dict) -> bytes:
     ], col_widths=[55 * mm, None]))
     el.append(Spacer(1, 4 * mm))
     el.append(Paragraph("1.2 施設配置", st["h2"]))
-    el.append(_tbl([
-        ["番号", "名称", "形式"],
-        ["1", inp.basin_name, "流域"],
-        ["2", inp.pond_name, "貯留施設"],
-    ], col_widths=[18 * mm, None, 40 * mm]))
+    layout_rows = [["番号", "名称", "形式"], ["1", inp.basin_name, "流域"]]
+    _no = 2
+    if infil:
+        layout_rows.append([str(_no), "浸透施設", "浸透施設"])
+        _no += 1
+    layout_rows.append([str(_no), inp.pond_name, "貯留施設"])
+    el.append(_tbl(layout_rows, col_widths=[18 * mm, None, 40 * mm]))
     el.append(PageBreak())
 
     # ---- 2章 流域
@@ -264,9 +280,60 @@ def build_pdf(result: dict) -> bytes:
     el.append(_tbl(table_rows, align_right_cols=tuple(range(6)), font_size=7.5))
     el.append(PageBreak())
 
-    # ---- 3章 貯留施設
-    el.append(Paragraph("3章 貯留施設", st["h1"]))
-    el.append(Paragraph(f"3.1 {inp.pond_name}", st["h2"]))
+    # ---- 浸透施設（任意）
+    if ch_infil:
+        el.append(Paragraph(f"{ch_infil}章 浸透施設", st["h1"]))
+        el.append(Paragraph(f"{ch_infil}.1 設計浸透量", st["h2"]))
+        if infil["facilities"]:
+            frows = [["構造形式", "数量", "単位", "単位設計浸透量(m³/h)", "浸透量(m³/h)"]]
+            for f in infil["facilities"]:
+                frows.append([f["name"], _fmt(f["quantity"], 2), f["unit"],
+                              _fmt(f["unit_infiltration_m3h"], 4),
+                              _fmt(f["total_m3h"], 3)])
+            frows.append(["設計浸透量 R（合計）", "", "", "",
+                          _fmt(infil["R_m3h"], 3) if infil["R_m3h"] is not None else "－"])
+            el.append(_tbl(frows, align_right_cols=(1, 3, 4)))
+            el.append(Spacer(1, 4 * mm))
+        el.append(Paragraph("浸透量の算出方法: 有効降雨モデル", st["body"]))
+        el.append(_tbl([
+            ["項目", "値", "備考"],
+            ["設計浸透量 R",
+             f"{_fmt(infil['R_m3h'], 3)} m³/h" if infil["R_m3h"] is not None else "－",
+             "Σ(数量×単位設計浸透量)"],
+            ["浸透処理面積 Ac", f"{_fmt(infil['treatment_area_ha'], 3)} ha", ""],
+            ["浸透処理面積率 α", f"{_fmt(infil['treatment_ratio'] * 100, 1)} %",
+             "Ac / 開発面積 A"],
+            ["設計浸透強度 Fc", f"{_fmt(infil['fc_mmhr'], 4)} mm/h", "R /（Ac×10）"],
+        ], col_widths=[45 * mm, 45 * mm, None]))
+        el.append(Spacer(1, 4 * mm))
+
+        # 有効雨量とハイドログラフ表（Δt毎、浸透控除後）
+        el.append(Paragraph(f"{ch_infil}.2 有効雨量とハイドログラフ（浸透控除後）", st["h2"]))
+        el.append(Paragraph(
+            f"有効降雨強度 Ic = max(f・I − Fc, 0)、Fc = {_fmt(infil['fc_mmhr'], 4)} mm/hr、"
+            "流出量 Q = 1/360・Ic・A", st["small"]))
+        ihead = ["時刻(分)", "降雨強度I(mm/hr)", "有効降雨Ic(mm/hr)", "流出量(m³/s)"]
+        nrow = len(hyeto["times"])
+        ihalf = (nrow + 1) // 2
+        irows = [ihead + ihead]
+        for i in range(ihalf):
+            row = [str(hyeto["times"][i]), _fmt(hyeto["intensity_mmhr"][i], 2),
+                   _fmt(inflow["effective_intensity_mmhr"][i], 3),
+                   _fmt(inflow["flows_m3s"][i], 3)]
+            j = i + ihalf
+            if j < nrow:
+                row += [str(hyeto["times"][j]), _fmt(hyeto["intensity_mmhr"][j], 2),
+                        _fmt(inflow["effective_intensity_mmhr"][j], 3),
+                        _fmt(inflow["flows_m3s"][j], 3)]
+            else:
+                row += ["", "", "", ""]
+            irows.append(row)
+        el.append(_tbl(irows, align_right_cols=tuple(range(8)), font_size=7.0))
+        el.append(PageBreak())
+
+    # ---- 貯留施設
+    el.append(Paragraph(f"{ch_storage}章 貯留施設", st["h1"]))
+    el.append(Paragraph(f"{ch_storage}.1 {inp.pond_name}", st["h2"]))
     q_note = "（放流比流量より自動設定）" if result["allowable_q_auto"] else ""
     el.append(_tbl([
         ["項目", "値"],
@@ -340,11 +407,10 @@ def build_pdf(result: dict) -> bytes:
     ], col_widths=[75 * mm, None]))
     el.append(PageBreak())
 
-    # ---- 4章 洪水吐き
-    chapter = 4
+    # ---- 洪水吐き（任意）
     if spill:
-        el.append(Paragraph("4章 洪水吐き", st["h1"]))
-        el.append(Paragraph(f"4.1 {inp.pond_name}", st["h2"]))
+        el.append(Paragraph(f"{ch_spill}章 洪水吐き", st["h1"]))
+        el.append(Paragraph(f"{ch_spill}.1 {inp.pond_name}", st["h2"]))
         q2row = ([["流出量 Q2（クリーガー型比流量）", f"{_fmt(spill['Q2_m3s'])} m³/s"]]
                  if spill["Q2_m3s"] is not None else [])
         el.append(_tbl([
@@ -402,10 +468,9 @@ def build_pdf(result: dict) -> bytes:
                 ["判定", "ＯＫ" if fc["ok"] else "ＮＧ（危険）", ""],
             ], col_widths=[58 * mm, 45 * mm, None]))
         el.append(PageBreak())
-        chapter = 5
 
     # ---- 総括表
-    el.append(Paragraph(f"{chapter}章 総括表", st["h1"]))
+    el.append(Paragraph(f"{ch_summary}章 総括表", st["h1"]))
     sum_rows = [
         ["項目", "値"],
         ["流域面積", f"{_fmt(inp.area_ha, 3)} ha"],
@@ -413,6 +478,15 @@ def build_pdf(result: dict) -> bytes:
         ["計画降雨超過確率", f"1/{inp.return_period}年"],
         ["流出係数", _fmt(inp.runoff_f, 3)],
         ["洪水到達時間", f"{_fmt(tc['tc_min'], 1)} 分"],
+    ]
+    if infil:
+        sum_rows += [
+            ["設計浸透量 R",
+             f"{_fmt(infil['R_m3h'], 3)} m³/h" if infil["R_m3h"] is not None else "－"],
+            ["設計浸透強度 Fc", f"{_fmt(infil['fc_mmhr'], 4)} mm/h"],
+            ["浸透処理面積率 α", f"{_fmt(infil['treatment_ratio'] * 100, 1)} %"],
+        ]
+    sum_rows += [
         ["許容放流量", f"{_fmt(result['allowable_q_m3s'])} m³/s"],
         ["最大放流量", f"{_fmt(routing['max_outflow_m3s'])} m³/s"],
         ["必要洪水調節容量（簡便法）", f"{_fmt(simp['V_m3'], 1)} m³"],

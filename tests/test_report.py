@@ -41,6 +41,23 @@ def test_build_pdf():
     assert len(pdf) > 30_000
 
 
+def test_build_pdf_with_infiltration():
+    inp = sample_input_chiba()
+    inp.infiltration_enabled = True
+    inp.infiltration_treatment_area_ha = 3.0
+    inp.infiltration_facilities = [
+        {"type_id": "trench", "quantity": 500.0, "unit_infiltration_m3h": 0.05},
+        {"type_id": "masu", "quantity": 40.0, "unit_infiltration_m3h": 0.2},
+    ]
+    res = run_project(inp)
+    assert res["infiltration"]["fc_mmhr"] > 0
+    # 浸透により簡便法の必要調節容量が減ること
+    res_no = run_project(sample_input_chiba())
+    assert res["simplified"]["V_m3"] < res_no["simplified"]["V_m3"]
+    pdf = build_pdf(res)
+    assert pdf[:5] == b"%PDF-"
+
+
 def test_run_project_ibaraki():
     inp = sample_input_chiba()
     inp.prefecture_id = "ibaraki"

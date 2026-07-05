@@ -39,6 +39,13 @@ class SectionIn(BaseModel):
     velocity_ms: float = 0.0
 
 
+class InfiltrationFacilityIn(BaseModel):
+    type_id: str = "other"
+    name: str = ""
+    quantity: float = 0.0
+    unit_infiltration_m3h: float = 0.0
+
+
 class CalcRequest(BaseModel):
     title: str = "防災調整池 容量計算書"
     project_name: str = ""
@@ -69,6 +76,12 @@ class CalcRequest(BaseModel):
     initial_level_m: float | None = None
     orifices: list[OrificeIn]
 
+    infiltration_enabled: bool = False
+    infiltration_facilities: list[InfiltrationFacilityIn] = []
+    infiltration_treatment_area_ha: float = 0.0
+    infiltration_direct_R_m3h: float = 0.0
+    infiltration_direct_fc_mmhr: float = 0.0
+
     sediment_years: float = 1.0
     sediment_unit_m3_per_ha_year: float = 150.0
 
@@ -90,6 +103,8 @@ class CalcRequest(BaseModel):
         data = self.model_dump()
         data["tc_sections"] = [s.model_dump() for s in self.tc_sections]
         data["orifices"] = [o.model_dump() for o in self.orifices]
+        data["infiltration_facilities"] = [
+            f.model_dump() for f in self.infiltration_facilities]
         return ProjectInput(**data)
 
 
@@ -115,12 +130,19 @@ def api_calculate(req: CalcRequest):
     res = _run(req)
     routing = res["routing"]
     spill = res["spillway"]
+    infil = res["infiltration"]
     return {
         "formula": res["formula"].label(),
         "spill_formula": res["spill_formula"].label(),
         "tc_min": res["tc"]["tc_min"],
         "tc_method": res["tc"]["method"],
         "total_rain_mm": res["hyetograph"]["total_mm"],
+        "infiltration": None if infil is None else {
+            "R_m3h": infil["R_m3h"],
+            "fc_mmhr": infil["fc_mmhr"],
+            "treatment_area_ha": infil["treatment_area_ha"],
+            "treatment_ratio": infil["treatment_ratio"],
+        },
         "rational_peak_m3s": res["rational_peak_m3s"],
         "inflow_peak_m3s": res["inflow"]["peak_m3s"],
         "allowable_q_m3s": res["allowable_q_m3s"],

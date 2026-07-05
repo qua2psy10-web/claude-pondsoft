@@ -99,7 +99,32 @@
   </section>
 
   <section>
-    <h2>4. 洪水吐き</h2>
+    <h2>4. 浸透施設（任意）</h2>
+    <div class="grid">
+      <label>浸透施設を見込む
+        <select id="infiltration_enabled">
+          <option value="false">いいえ</option>
+          <option value="true">はい</option>
+        </select>
+      </label>
+      <label>浸透処理面積 Ac（ha）<input type="number" id="infiltration_treatment_area" value="0" step="0.001" min="0"></label>
+      <label>設計浸透量 R 直接指定（m³/h）※0で施設積み上げ
+        <input type="number" id="infiltration_direct_R" value="0" step="0.001" min="0"></label>
+      <label>設計浸透強度 Fc 直接指定（mm/h）※0で自動
+        <input type="number" id="infiltration_direct_fc" value="0" step="0.001" min="0"></label>
+    </div>
+    <p class="note">有効降雨モデル: 有効降雨強度 f・I から設計浸透強度 Fc = R /（Ac×10）を差し引いて流入を低減します。</p>
+
+    <h3>浸透施設の内訳（設計浸透量Rを積み上げ）</h3>
+    <table class="input-table" id="infil-table">
+      <thead><tr><th>構造形式</th><th>数量</th><th>単位設計浸透量（m³/h/単位）</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <button type="button" class="mini" onclick="addInfilRow()">＋ 行を追加</button>
+  </section>
+
+  <section>
+    <h2>5. 洪水吐き</h2>
     <div class="grid">
       <label>計算する
         <select id="spillway_enabled">
