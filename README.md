@@ -28,16 +28,38 @@
 
 ## 起動方法
 
+Python 3.10 以上が必要です。仮想環境（venv）を使う方法を推奨します。
+
 ```bash
+# 1. リポジトリを取得して中へ
+git clone https://github.com/qua2psy10-web/claude-pondsoft.git
+cd claude-pondsoft
+
+# 2. 仮想環境を作成・有効化
+python3 -m venv .venv
+source .venv/bin/activate          # Windows は .venv\Scripts\activate
+
+# 3. 依存パッケージを導入して起動
 pip install -r requirements.txt
 uvicorn app.main:app --reload
-# → http://127.0.0.1:8000 をブラウザで開く
+# → http://127.0.0.1:8000 をブラウザで開く（停止は Control + C）
 ```
+
+次回以降は `cd claude-pondsoft && source .venv/bin/activate && uvicorn app.main:app --reload` だけで起動できます。
+
+> **macOS / Linux で `command not found: pip`・`uvicorn` になる場合**
+> `pip` や `uvicorn` が PATH に無いだけなので、`python3 -m` を付けて呼べば動きます（venv 未使用でも可）。
+> ```bash
+> python3 -m pip install -r requirements.txt
+> python3 -m uvicorn app.main:app --reload
+> ```
+> `python3` 自体が無い場合は Python を先に導入してください（[python.org](https://www.python.org/downloads/) もしくは Homebrew の `brew install python`）。
+> なお `requirements.txt` はリポジトリ直下にあります。実行前に `cd claude-pondsoft`（`ls` で `requirements.txt` が見える場所）にいることを確認してください。
 
 ## テスト
 
 ```bash
-pytest
+pytest            # venv 有効時。無効なら python3 -m pytest
 ```
 
 降雨強度式は基準書の数値表（例: 館野1/50・t=60分 → 84.74 mm/hr、千葉地区1/50・t=60分 → 72.9 mm/hr）
