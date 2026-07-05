@@ -1,0 +1,52 @@
+* { box-sizing: border-box; }
+body {
+  font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  margin: 0; background: #f4f6f8; color: #1a2430;
+}
+header {
+  background: #163a5f; color: #fff; padding: 18px 28px;
+}
+header h1 { margin: 0; font-size: 1.4rem; }
+header .sub { margin: 6px 0 0; font-size: 0.85rem; opacity: 0.85; }
+main { max-width: 1080px; margin: 0 auto; padding: 20px 24px 60px; }
+section {
+  background: #fff; border: 1px solid #d7dee6; border-radius: 8px;
+  padding: 18px 22px; margin-bottom: 18px;
+}
+h2 { font-size: 1.05rem; margin: 0 0 12px; color: #163a5f; }
+h3 { font-size: 0.92rem; margin: 16px 0 6px; color: #2c4a6e; }
+.grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px 16px;
+}
+label { display: flex; flex-direction: column; font-size: 0.8rem; gap: 4px; color: #3a4a5c; }
+input, select {
+  padding: 6px 8px; border: 1px solid #b8c4d0; border-radius: 5px;
+  font-size: 0.9rem; background: #fff;
+}
+.note { font-size: 0.78rem; color: #5b6b7c; margin: 10px 0 0; }
+.hidden { display: none !important; }
+.input-table { border-collapse: collapse; font-size: 0.85rem; margin: 4px 0; }
+.input-table th, .input-table td { border: 1px solid #c9d3dd; padding: 3px 6px; }
+.input-table th { background: #eef2f6; font-weight: 600; font-size: 0.78rem; }
+.input-table input, .input-table select { border: none; width: 110px; padding: 4px; }
+button.mini {
+  font-size: 0.78rem; padding: 3px 10px; margin: 4px 0 0;
+  border: 1px solid #8ea4ba; background: #f0f4f8; border-radius: 4px; cursor: pointer;
+}
+button.rm { border: none; background: none; color: #b33; cursor: pointer; font-size: 0.9rem; }
+.actions { display: flex; align-items: center; gap: 14px; margin: 8px 0 16px; }
+button.primary, button.secondary {
+  padding: 10px 26px; font-size: 0.95rem; border-radius: 6px; cursor: pointer; border: none;
+}
+button.primary { background: #163a5f; color: #fff; }
+button.primary:hover { background: #1f4d7d; }
+button.secondary { background: #2e7d32; color: #fff; }
+button.secondary:disabled { background: #9bb; cursor: not-allowed; }
+#status { font-size: 0.85rem; color: #b33; }
+#result-body table { border-collapse: collapse; font-size: 0.88rem; width: 100%; }
+#result-body th, #result-body td { border: 1px solid #c9d3dd; padding: 6px 10px; text-align: left; }
+#result-body th { background: #eef2f6; width: 40%; }
+.ok { color: #2e7d32; font-weight: 700; }
+.ng { color: #c62828; font-weight: 700; }
+footer { max-width: 1080px; margin: 0 auto; padding: 0 24px 40px; font-size: 0.75rem; color: #6b7a8a; }
