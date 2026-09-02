@@ -41,17 +41,20 @@ source .venv/bin/activate          # Windows は .venv\Scripts\activate
 
 # 3. 依存パッケージを導入して起動
 pip install -r requirements.txt
-uvicorn app.main:app --reload
-# → http://127.0.0.1:8000 をブラウザで開く（停止は Control + C）
+python run.py
+# → ブラウザが自動的に開きます（停止は Control + C）
 ```
 
-次回以降は `cd claude-pondsoft && source .venv/bin/activate && uvicorn app.main:app --reload` だけで起動できます。
+次回以降は `cd claude-pondsoft && source .venv/bin/activate && python run.py` だけで起動できます。
 
-> **macOS / Linux で `command not found: pip`・`uvicorn` になる場合**
-> `pip` や `uvicorn` が PATH に無いだけなので、`python3 -m` を付けて呼べば動きます（venv 未使用でも可）。
+> **開発者向け**: ファイル変更を自動反映したい場合は `uvicorn app.main:app --reload` を使ってください
+> （この場合はブラウザで手動 http://127.0.0.1:8000 を開いてください）。
+
+> **macOS / Linux で `command not found: pip` になる場合**
+> `pip` が PATH に無いだけなので、`python3 -m` を付けて呼べば動きます（venv 未使用でも可）。
 > ```bash
 > python3 -m pip install -r requirements.txt
-> python3 -m uvicorn app.main:app --reload
+> python3 run.py
 > ```
 > `python3` 自体が無い場合は Python を先に導入してください（[python.org](https://www.python.org/downloads/) もしくは Homebrew の `brew install python`）。
 > なお `requirements.txt` はリポジトリ直下にあります。実行前に `cd claude-pondsoft`（`ls` で `requirements.txt` が見える場所）にいることを確認してください。
@@ -85,6 +88,7 @@ pytest            # venv 有効時。無効なら python3 -m pytest
 ## ディレクトリ構成
 
 ```
+run.py               起動ランチャー（サーバー起動＋ブラウザ自動オープン）
 app/
   main.py            FastAPI（画面・計算API・PDF出力）
   engine/            計算エンジン（UI非依存・純粋関数）
